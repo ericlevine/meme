@@ -1,6 +1,7 @@
 package main
 
 import (
+  "strings"
   "image"
   "image/png"
   "image/jpeg"
@@ -28,10 +29,18 @@ func main() {
   inImage, err := openImage("image.jpeg")
   if err != nil { os.Exit(1) }
 
-  topStrs := []string{"HELLO THERE", "MY NAME IS ERIC"}
-  bottomStrs := []string{"I THINK THAT", "YOU ARE REALLY GREAT"}
+  i, err := createMeme(inImage, "hello there my name is eric", "i think that you are really great")
+  if err != nil { os.Exit(1) }
 
-  bounds := inImage.Bounds()
+  writeImage("out1.png", i)
+  if err != nil { os.Exit(1) }
+}
+
+func createMeme(background image.Image, topText, bottomText string) (image.Image, error) {
+  topText = strings.ToUpper(topText)
+  bottomText = strings.ToUpper(bottomText)
+
+  bounds := background.Bounds()
   height := float64(bounds.Max.Y - bounds.Min.Y)
   width := float64(bounds.Max.X - bounds.Min.X)
 
@@ -43,16 +52,13 @@ func main() {
   i := image.NewRGBA(image.Rect(0, 0, int(ctx.width), int(ctx.height)))
   initializeGraphicContext(&ctx, i)
 
-  ctx.gc.DrawImage(inImage)
+  ctx.gc.DrawImage(background)
 
-  writeTop(topStrs, &ctx)
-  writeBottom(bottomStrs, &ctx)
+  lineLength := int(width / height * 18)
+  writeTop(splitString(topText, lineLength), &ctx)
+  writeBottom(splitString(bottomText, lineLength), &ctx)
 
-  writeImage("out1.png", i)
-  if err != nil { os.Exit(1) }
-}
-
-func createMeme(inFile, outFile, topText, bottomText string) error {
+  return i, nil
 }
 
 func openImage(name string) (image.Image, error) {
@@ -165,4 +171,37 @@ func getMaxWidth(bounds []TextBounds) float64 {
     }
   }
   return maxWidth
+}
+
+func splitString(s string, length int) []string {
+  strs := make([]string, 0)
+  split := findSplit(s, length)
+  for split != -1 {
+    strs = append(strs, s[:split])
+    s = s[split + 1:]
+    split = findSplit(s, length)
+  }
+  strs = append(strs, s)
+  return strs
+}
+
+func findSplit(s string, length int) int {
+  if len(s) < length { return -1 }
+  best := -1
+  for split := 0; split != best; split = strings.Index(s[best+1:], " ") + best + 1 {
+    if split > length {
+      if absInt(length - split) > absInt(length - best) {
+        return best
+      } else {
+        return split
+      }
+    }
+    best = split
+  }
+  return -1
+}
+
+func absInt(i int) int {
+  if i < 0 { return -i }
+  return i
 }
