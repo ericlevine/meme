@@ -16,12 +16,21 @@ var (
   yMargin  = 20.0
 )
 
-type MemeContext struct {
+type memeLine struct {
+  x, y, scale float64
+  text string
+}
+
+type memeText struct {
+  top, bottom []memeLine
+}
+
+type memeContext struct {
   height, width float64
   gc draw2d.GraphicContext
 }
 
-type TextBounds struct {
+type textBounds struct {
   left, top, right, bottom float64
 }
 
@@ -44,7 +53,7 @@ func createMeme(background image.Image, topText, bottomText string) (image.Image
   height := float64(bounds.Max.Y - bounds.Min.Y)
   width := float64(bounds.Max.X - bounds.Min.X)
 
-  ctx := MemeContext{
+  ctx := memeContext{
     height: height,
     width: width,
   }
@@ -55,8 +64,18 @@ func createMeme(background image.Image, topText, bottomText string) (image.Image
   ctx.gc.DrawImage(background)
 
   lineLength := int(width / height * 18)
-  writeTop(splitString(topText, lineLength), &ctx)
-  writeBottom(splitString(bottomText, lineLength), &ctx)
+  text := memeText{
+    top: topLines(splitString(topText, lineLength), &ctx),
+    bottom: bottomLines(splitString(bottomText, lineLength), &ctx),
+  }
+
+  for _, line := range text.top {
+    writeString(line.text, line.x, line.y, line.scale, &ctx)
+  }
+
+  for _, line := range text.bottom {
+    writeString(line.text, line.x, line.y, line.scale, &ctx)
+  }
 
   return i, nil
 }
@@ -82,7 +101,7 @@ func writeImage(name string, i image.Image) error {
   return nil
 }
 
-func initializeGraphicContext(ctx *MemeContext, im *image.RGBA) {
+func initializeGraphicContext(ctx *memeContext, im *image.RGBA) {
   draw2d.SetFontFolder(".")
 
   ctx.gc = draw2d.NewGraphicContext(im)
@@ -93,13 +112,15 @@ func initializeGraphicContext(ctx *MemeContext, im *image.RGBA) {
   ctx.gc.SetFontSize(200)
 }
 
-func writeTop(lines []string, ctx *MemeContext) {
+func topLines(lines []string, ctx *memeContext) []memeLine {
   bounds := getBounds(lines, ctx)
   maxWidth := getMaxWidth(bounds)
 
   scale := (ctx.width - 2 * xMargin) / maxWidth
 
   lastTopOffset := yMargin - yPadding
+
+  results := make([]memeLine, len(lines))
 
   for i, str := range lines {
     b := bounds[i]
@@ -112,17 +133,26 @@ func writeTop(lines []string, ctx *MemeContext) {
 
     lastTopOffset = topOffset
 
-    writeString(str, leftOffset, topOffset, scale, ctx)
+    results[i] = memeLine{
+      x: leftOffset,
+      y: topOffset,
+      scale: scale,
+      text: str,
+    }
   }
+
+  return results
 }
 
-func writeBottom(lines []string, ctx *MemeContext) {
+func bottomLines(lines []string, ctx *memeContext) []memeLine {
   bounds := getBounds(lines, ctx)
   maxWidth := getMaxWidth(bounds)
 
   scale := (ctx.width - 2 * xMargin) / maxWidth
 
   lastTopOffset := ctx.height + (yMargin - yPadding)
+
+  results := make([]memeLine, len(lines))
 
   for i := len(lines) - 1; i >= 0; i-- {
     str := lines[i]
@@ -136,11 +166,18 @@ func writeBottom(lines []string, ctx *MemeContext) {
 
     lastTopOffset = topOffset - height * scale
 
-    writeString(str, leftOffset, topOffset, scale, ctx)
+    results[i] = memeLine{
+      x: leftOffset,
+      y: topOffset,
+      scale: scale,
+      text: str,
+    }
   }
+
+  return results
 }
 
-func writeString(str string, leftOffset, topOffset, scale float64, ctx *MemeContext) {
+func writeString(str string, leftOffset, topOffset, scale float64, ctx *memeContext) {
   ctx.gc.Restore()
   ctx.gc.Save()
 
@@ -153,16 +190,16 @@ func writeString(str string, leftOffset, topOffset, scale float64, ctx *MemeCont
   ctx.gc.FillString(str)
 }
 
-func getBounds(lines []string, ctx *MemeContext) []TextBounds {
-  bounds := make([]TextBounds, len(lines))
+func getBounds(lines []string, ctx *memeContext) []textBounds {
+  bounds := make([]textBounds, len(lines))
   for i, s := range lines {
     left, top, right, bottom := ctx.gc.GetStringBounds(s)
-    bounds[i] = TextBounds{left, top, right, bottom}
+    bounds[i] = textBounds{left, top, right, bottom}
   }
   return bounds
 }
 
-func getMaxWidth(bounds []TextBounds) float64 {
+func getMaxWidth(bounds []textBounds) float64 {
   maxWidth := 0.0
   for _, b := range bounds {
     width := b.right - b.left
