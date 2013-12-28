@@ -49,6 +49,9 @@ func main() {
   } else if format == "jpeg" {
     err = writer.WriteMemeJPEG(in, out, top, bottom)
     if err != nil { errorExit("Could not create meme.", err) }
+  } else if format == "png" {
+    err = writer.WriteMemePNG(in, out, top, bottom)
+    if err != nil { errorExit("Could not create meme.", err) }
   } else {
     fmt.Println("Unsupported image format.")
     os.Exit(1)

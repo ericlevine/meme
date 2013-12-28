@@ -38,6 +38,9 @@ func memeHandler(w http.ResponseWriter, r *http.Request) {
   } else if contentType == "image/jpeg" {
     writer.WriteMemeJPEG(in, &out, top, bottom)
     outFilename = "memes/out.jpg"
+  } else if contentType == "image/png" {
+    writer.WriteMemePNG(in, &out, top, bottom)
+    outFilename = "memes/out.png"
   } else {
     fmt.Println("Unsupported image format.")
     os.Exit(1)
