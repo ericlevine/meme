@@ -2,17 +2,31 @@ package main
 
 import (
   "bufio"
+  "flag"
   "fmt"
   "image"
   "os"
   "github.com/ericlevine/meme/writer"
 )
 
+var (
+  inFilename, outFilename, top, bottom string
+)
+
+func init() {
+  flag.StringVar(&inFilename, "in", "", "Input image file.")
+  flag.StringVar(&outFilename, "out", "", "Output image file.")
+  flag.StringVar(&top, "top", "", "Top meme text.")
+  flag.StringVar(&bottom, "bottom", "", "Bottom meme text.")
+}
+
 func main() {
-  inFilename := "jason.gif"
-  outFilename := "out.gif"
-  top := "hello there my name is eric"
-  bottom := "i think that you are really great"
+  flag.Parse()
+
+  if inFilename == "" || outFilename == "" {
+    fmt.Println("-in and -out flags are required")
+    os.Exit(1)
+  }
 
   in, err := os.Open(inFilename)
   if err != nil { errorExit("Error opening input file.", err) }
@@ -30,9 +44,11 @@ func main() {
   if err != nil { errorExit("Error seeking back to beginning of file.", err) }
 
   if format == "gif" {
-    writer.WriteMemeGIF(in, out, top, bottom)
+    err = writer.WriteMemeGIF(in, out, top, bottom)
+    if err != nil { errorExit("Could not create meme.", err) }
   } else if format == "jpeg" {
-    writer.WriteMemeJPEG(in, out, top, bottom)
+    err = writer.WriteMemeJPEG(in, out, top, bottom)
+    if err != nil { errorExit("Could not create meme.", err) }
   } else {
     fmt.Println("Unsupported image format.")
     os.Exit(1)

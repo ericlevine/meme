@@ -1,15 +1,23 @@
 package render
 
 import (
-  "strings"
+  "flag"
   "image"
+  "io/ioutil"
+  "strings"
   "code.google.com/p/draw2d/draw2d"
+  "code.google.com/p/freetype-go/freetype"
 )
 
 var (
+  fontFile string
+  fontData = draw2d.FontData{"impact", draw2d.FontFamilySans, 0}
+  fontLoaded = false
+
   yPadding = 20.0
   xMargin  = 20.0
   yMargin  = 20.0
+  maxScale = 0.3
 )
 
 type memeContext struct {
@@ -21,7 +29,26 @@ type TextBounds struct {
   left, top, right, bottom float64
 }
 
+func init() {
+  flag.StringVar(&fontFile, "font", "impactsr.ttf", "Font file.")
+}
+
+func loadFont() error {
+  fontBytes, err := ioutil.ReadFile(fontFile)
+  if err != nil { return err }
+  font, err := freetype.ParseFont(fontBytes)
+  if err != nil { return err }
+  draw2d.RegisterFont(fontData, font)
+  fontLoaded = true
+  return nil
+}
+
 func CreateMeme(background image.Image, topText, bottomText string) (image.Image, error) {
+  if !fontLoaded {
+    err := loadFont()
+    if err != nil { return nil, err }
+  }
+
   topText = strings.ToUpper(topText)
   bottomText = strings.ToUpper(bottomText)
 
@@ -53,7 +80,7 @@ func initializeGraphicContext(ctx *memeContext, im *image.RGBA) {
 
   ctx.gc.SetStrokeColor(image.Black)
   ctx.gc.SetFillColor(image.White)
-  ctx.gc.SetFontData(draw2d.FontData{"impact", draw2d.FontFamilySans, 0})
+  ctx.gc.SetFontData(fontData)
   ctx.gc.SetFontSize(200)
 }
 
