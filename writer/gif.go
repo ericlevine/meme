@@ -12,12 +12,16 @@ import (
 func WriteMemeGIF(r io.Reader, w io.Writer, top, bottom string) error {
   i, err := gif.DecodeAll(r)
   if err != nil { return err }
-  // TODO: copy gif here
-  err = createGifMeme(i, top, bottom)
+  err = createGifMeme(copyGif(i), top, bottom)
   if err != nil { return err }
   err = gif.EncodeAll(w, i)
   if err != nil { return err }
   return nil
+}
+
+func copyGif(src *gif.GIF) *gif.GIF {
+  cpy := *src
+  return &cpy
 }
 
 func createGifMeme(background *gif.GIF, topText, bottomText string) error {
