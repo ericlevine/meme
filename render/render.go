@@ -4,6 +4,7 @@ import (
   "flag"
   "image"
   "io/ioutil"
+  "math"
   "strings"
   "code.google.com/p/draw2d/draw2d"
   "code.google.com/p/freetype-go/freetype"
@@ -25,7 +26,7 @@ type memeContext struct {
   gc draw2d.GraphicContext
 }
 
-type TextBounds struct {
+type textBounds struct {
   left, top, right, bottom float64
 }
 
@@ -49,9 +50,6 @@ func CreateMeme(background image.Image, topText, bottomText string) (image.Image
     if err != nil { return nil, err }
   }
 
-  topText = strings.ToUpper(topText)
-  bottomText = strings.ToUpper(bottomText)
-
   bounds := background.Bounds()
   height := float64(bounds.Max.Y - bounds.Min.Y)
   width := float64(bounds.Max.X - bounds.Min.X)
@@ -67,10 +65,14 @@ func CreateMeme(background image.Image, topText, bottomText string) (image.Image
   ctx.gc.DrawImage(background)
 
   lineLength := int(width / height * 18)
-  writeTop(splitString(topText, lineLength), &ctx)
-  writeBottom(splitString(bottomText, lineLength), &ctx)
+  writeLines(prepString(topText, lineLength), true, &ctx)
+  writeLines(prepString(bottomText, lineLength), false, &ctx)
 
   return i, nil
+}
+
+func prepString(s string, lineLength int) []string {
+  return splitString(strings.ToUpper(s), lineLength)
 }
 
 func initializeGraphicContext(ctx *memeContext, im *image.RGBA) {
@@ -84,58 +86,54 @@ func initializeGraphicContext(ctx *memeContext, im *image.RGBA) {
   ctx.gc.SetFontSize(200)
 }
 
-func writeTop(lines []string, ctx *memeContext) {
+func writeLines(lines []string, isTop bool, ctx *memeContext) {
   bounds := getBounds(lines, ctx)
   maxWidth := getMaxWidth(bounds)
 
-  scale := (ctx.width - 2 * xMargin) / maxWidth
+  idealScale := (ctx.width - 2 * xMargin) / maxWidth
+  scale := math.Min(idealScale, maxScale)
 
-  lastTopOffset := yMargin - yPadding
+  nextTopOffset := 0.0
+  if isTop {
+    nextTopOffset = yMargin
+  } else {
+    // Start at the bottom edge
+    nextTopOffset = ctx.height
+
+    // Remove the bottom margin
+    nextTopOffset -= yMargin
+
+    // Remove the padding between the lines of text
+    nextTopOffset -= yPadding * float64(len(lines) - 1)
+
+    // Remove the height of the lines
+    for _, b := range bounds {
+      nextTopOffset -= (b.bottom - b.top) * scale
+    }
+  }
 
   for i, str := range lines {
     b := bounds[i]
 
-    width := b.right - b.left
-    leftOffset := xMargin + ((maxWidth - width) / 2 - b.left) * scale
+    width := (b.right - b.left) * scale
+    fullWidth := maxWidth * idealScale
+    leftOffset := xMargin + ((fullWidth - width) / 2 - b.left * scale)
+
+    topOffset := nextTopOffset
 
     height := b.bottom - b.top
-    topOffset := lastTopOffset + (height * scale + yPadding)
+    bottomOffset := topOffset + height * scale
+    nextTopOffset = bottomOffset + yPadding
 
-    lastTopOffset = topOffset
-
-    writeString(str, leftOffset, topOffset, scale, ctx)
+    writeString(str, leftOffset, bottomOffset, scale, ctx)
   }
 }
 
-func writeBottom(lines []string, ctx *memeContext) {
-  bounds := getBounds(lines, ctx)
-  maxWidth := getMaxWidth(bounds)
-
-  scale := (ctx.width - 2 * xMargin) / maxWidth
-
-  lastTopOffset := ctx.height + (yMargin - yPadding)
-
-  for i := len(lines) - 1; i >= 0; i-- {
-    str := lines[i]
-    b := bounds[i]
-
-    width := b.right - b.left
-    leftOffset := xMargin + ((maxWidth - width) / 2 - b.left) * scale
-
-    height := b.bottom - b.top
-    topOffset := lastTopOffset - yPadding
-
-    lastTopOffset = topOffset - height * scale
-
-    writeString(str, leftOffset, topOffset, scale, ctx)
-  }
-}
-
-func writeString(str string, leftOffset, topOffset, scale float64, ctx *memeContext) {
+func writeString(str string, leftOffset, bottomOffset, scale float64, ctx *memeContext) {
   ctx.gc.Restore()
   ctx.gc.Save()
 
-  ctx.gc.Translate(leftOffset, topOffset)
+  ctx.gc.Translate(leftOffset, bottomOffset)
   ctx.gc.Scale(scale, scale)
 
   ctx.gc.SetLineWidth(15.0)
@@ -144,16 +142,16 @@ func writeString(str string, leftOffset, topOffset, scale float64, ctx *memeCont
   ctx.gc.FillString(str)
 }
 
-func getBounds(lines []string, ctx *memeContext) []TextBounds {
-  bounds := make([]TextBounds, len(lines))
+func getBounds(lines []string, ctx *memeContext) []textBounds {
+  bounds := make([]textBounds, len(lines))
   for i, s := range lines {
     left, top, right, bottom := ctx.gc.GetStringBounds(s)
-    bounds[i] = TextBounds{left, top, right, bottom}
+    bounds[i] = textBounds{left, top, right, bottom}
   }
   return bounds
 }
 
-func getMaxWidth(bounds []TextBounds) float64 {
+func getMaxWidth(bounds []textBounds) float64 {
   maxWidth := 0.0
   for _, b := range bounds {
     width := b.right - b.left
