@@ -1,27 +1,33 @@
 package writer
 
 import (
+  "fmt"
   "io"
   "image"
   "image/color"
   "image/gif"
   "math"
+  "time"
   "github.com/ericlevine/meme/render"
 )
 
+var start time.Time
+
 func WriteMemeGIF(r io.Reader, w io.Writer, top, bottom string) error {
+  start = time.Now()
   i, err := gif.DecodeAll(r)
+  fmt.Println("decoded.")
+  fmt.Println(time.Now().Sub(start))
   if err != nil { return err }
-  err = createGifMeme(copyGif(i), top, bottom)
+  err = createGifMeme(i, top, bottom)
+  fmt.Println("gif'd.")
+  fmt.Println(time.Now().Sub(start))
   if err != nil { return err }
   err = gif.EncodeAll(w, i)
+  fmt.Println("encoded.")
+  fmt.Println(time.Now().Sub(start))
   if err != nil { return err }
   return nil
-}
-
-func copyGif(src *gif.GIF) *gif.GIF {
-  cpy := *src
-  return &cpy
 }
 
 func createGifMeme(background *gif.GIF, topText, bottomText string) error {
@@ -31,22 +37,34 @@ func createGifMeme(background *gif.GIF, topText, bottomText string) error {
       image.NewRGBA(firstFrame.Bounds()), topText, bottomText)
   if err != nil { return err }
 
-  for _, pic := range background.Image {
-    injectColor(pic.Palette, image.White)
-    injectColor(pic.Palette, image.Black)
-    bounds := pic.Bounds()
-    for y := bounds.Min.Y; y < bounds.Max.Y; y++ {
-      for x := bounds.Min.X; x < bounds.Max.X; x++ {
-        color := overlayMeme.At(x, y)
-        _, _, _, alpha := color.RGBA()
-        if alpha > 0 {
-          pic.Set(x, y, color)
-        }
+  completion := make(chan bool)
+  for i, _ := range background.Image {
+    go func(index int) {
+      overlayMemeOnFrame(background.Image, index, overlayMeme)
+      completion <- true
+    }(i)
+  }
+  count := 0
+  for count < len(background.Image) {
+    <-completion
+    count += 1
+  }
+  return nil
+}
+
+func overlayMemeOnFrame(pics []*image.Paletted, i int, overlay image.Image) {
+  injectColor(pics[i].Palette, image.White)
+  injectColor(pics[i].Palette, image.Black)
+  bounds := pics[i].Bounds()
+  for y := bounds.Min.Y; y < bounds.Max.Y; y++ {
+    for x := bounds.Min.X; x < bounds.Max.X; x++ {
+      color := overlay.At(x, y)
+      _, _, _, alpha := color.RGBA()
+      if alpha > 0 {
+        pics[i].Set(x, y, color)
       }
     }
   }
-
-  return nil
 }
 
 func injectColor(p color.Palette, target color.Color) {
